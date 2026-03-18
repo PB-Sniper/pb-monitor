@@ -65,20 +65,28 @@
             let now = new Date().toLocaleTimeString('en-GB');
             updateUILastCheck(now);
 
-            // 判斷 HTML 入面有冇「有效嘅加入購物車紅掣」
-            let hasCartBtn = htmlText.includes('class="m-btn p-btn-red add-to-cart') || 
-                             htmlText.includes('id="js-addCart"');
+            // 💡 強化版判斷邏輯 (支援中英雙語及多種紅掣)
             
-            // 判斷掣係咪灰咗 (disabled)
-            let isDisabled = htmlText.includes('class="m-btn p-btn-red is-disabled"');
+            // 1. 檢查有冇任何類型嘅「有效紅色大掣」 (包含 add-to-cart, preorder, 或者純粹係 p-btn-red)
+            let hasRedBtn = htmlText.includes('class="m-btn p-btn-red') || 
+                            htmlText.includes('id="js-addCart"') ||
+                            htmlText.includes('id="js-preorder"');
             
-            // 補充文字判斷 (以防個掣被完全收埋)
+            // 2. 檢查個掣係咪灰咗 (is-disabled)
+            let isDisabled = htmlText.includes('is-disabled');
+            
+            // 3. 檢查有冇明確嘅「缺貨字眼」 (包含中英文)
             let hasOutOfStockText = htmlText.includes("預購結束") || 
                                     htmlText.includes("缺貨") || 
                                     htmlText.includes("已達到預約上限") ||
-                                    htmlText.includes("Pre-orders Closed");
+                                    htmlText.includes("Pre-orders Closed") ||
+                                    htmlText.includes("Out of Stock") ||
+                                    htmlText.includes("Sales Ended") ||
+                                    htmlText.includes("Reached reservation limit");
 
-            let isOutOfStock = (!hasCartBtn) || isDisabled || hasOutOfStockText;
+            // 💡 最終判定：
+            // 如果 (冇紅掣) 或者 (掣灰咗) 或者 (有缺貨字眼) -> 就係無貨
+            let isOutOfStock = (!hasRedBtn) || isDisabled || hasOutOfStockText;
 
             if (isOutOfStock) {
                 updateUIStatus("Out of Stock (無貨)", "#ff4444");
