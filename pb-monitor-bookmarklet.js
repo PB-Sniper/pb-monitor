@@ -29,37 +29,38 @@
         const currentUrl = window.location.href;
         updateUIStatus("Checking...", "#ffcc00");
 
+        // 背後 Fetch 最新 HTML
         fetch(currentUrl + "?t=" + new Date().getTime(), { headers: { 'Cache-Control': 'no-cache' } })
         .then(res => res.text())
         .then(htmlText => {
             let now = new Date().toLocaleTimeString('en-GB');
             updateUILastCheck(now);
 
-            // 💡 V3.2 精準判斷邏輯 (針對 p-button--red 同 msg.placePreOrder)
-            
-            // 1. 搵有冇「送出訂單 / PLACE PRE-ORDER / 加入購物車」嘅專屬特徵
-            // 包含舊版 m-btn p-btn-red 同新版 p-button--red / msg.placePreOrder
-            let hasRedBtn = htmlText.includes('p-button--red') || 
-                            htmlText.includes('msg.placePreOrder') || 
-                            htmlText.includes('m-btn p-btn-red') || 
-                            htmlText.includes('id="js-addCart"');
-            
-            // 2. 搵有冇「死掣」特徵
-            // 包含舊版 is-disabled 同新版 is-noActive
-            let isDisabled = htmlText.includes('is-noActive') || 
-                             htmlText.includes('is-disabled');
+            // 💡 V4.0 核心：用 DOMParser 精準拆解 HTML 結構，而唔係單純查字眼！
+            let parser = new DOMParser();
+            let doc = parser.parseFromString(htmlText, 'text/html');
 
-            // 3. 直接檢查有無新版專屬嘅「缺貨屬性」
-            let hasOutOfStockText = htmlText.includes('msg.sorryOutOfStock');
+            // 1. 尋找「有效」的購買按鈕 (紅掣)
+            // 只要搵到任何一個帶有 p-button--red 或 add-to-cart 的 button 或 a tag
+            let activeCartBtn = doc.querySelector('button.p-button--red, a.p-button--red, button.add-to-cart, a.add-to-cart, #js-addCart');
+            
+            // 2. 檢查該按鈕是否帶有「失效」的 Class (灰掣)
+            // 檢查是否包含 is-noActive, is-disabled 等
+            let isBtnDisabled = false;
+            if (activeCartBtn) {
+                isBtnDisabled = activeCartBtn.classList.contains('is-noActive') || 
+                                activeCartBtn.classList.contains('is-disabled');
+            }
 
-            // 💡 判斷：
-            // 如果 (冇紅掣) 或者 (掣變咗 noActive/disabled) 或者 (出現 msg.sorryOutOfStock) -> 無貨
-            let isOutOfStock = (!hasRedBtn) || isDisabled || hasOutOfStockText;
+            // 💡 終極判斷邏輯：
+            // 如果「根本搵唔到紅掣」，或者「搵到紅掣但佢係 disabled/noActive」，就係無貨！
+            // 由於我哋係直接望個掣嘅 DOM 結構，所以唔怕網頁其他地方收埋咗「缺貨」字眼！
+            let isOutOfStock = (!activeCartBtn) || isBtnDisabled;
 
             if (isOutOfStock) {
                 updateUIStatus("Out of Stock (無貨)", "#ff4444");
                 lastStatusWasOutOfStock = true;
-                console.log(`[${now}] 狀態：無貨`);
+                console.log(`[${now}] 狀態：無貨 (未發現有效紅掣)`);
             } else {
                 updateUIStatus("IN STOCK! (有貨)", "#00ff88");
                 console.log(`[${now}] 狀態：有貨！`);
@@ -94,7 +95,7 @@
         
         panel.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding-bottom:5px; margin-bottom:10px;">
-                <h3 style="color:#fc0; margin:0; font-size:14px; font-weight:bold;">🛰️ PB Monitor V3.2</h3>
+                <h3 style="color:#fc0; margin:0; font-size:14px; font-weight:bold;">🛰️ PB Monitor V4.0</h3>
                 <span id="pbm-close" style="cursor:pointer; color:#999; font-size:14px; font-weight:bold;">✕</span>
             </div>
             <div style="margin-bottom:8px">
@@ -128,7 +129,7 @@
                 isMonitoring = true;
                 toggleBtn.innerText = "⏹️ Stop Monitor";
                 toggleBtn.style.background = "#dc3545";
-                sendTelegramAlert(`📡 <b>系統啟動 (V3.2)</b>\n正在監控: <a href="${window.location.href}">${document.title.split('|')[0]}</a>`);
+                sendTelegramAlert(`📡 <b>系統啟動 (V4.0 DOM 解析版)</b>\n正在監控: <a href="${window.location.href}">${document.title.split('|')[0]}</a>`);
                 checkStock();
             }
         });
