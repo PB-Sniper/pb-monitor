@@ -1,96 +1,68 @@
 (function() {
     'use strict';
 
-    // 避免重複載入面板
     if (document.getElementById('pbm-panel')) {
         console.log("Monitor already loaded.");
         return;
     }
 
-    // ==========================================
-    // ⚙️ 設定區
-    // ==========================================
     const TG_TOKEN = "8744700068:AAG5q3FS3ST78U0j1D4LZhej9DBvmHb0t_E"; 
     const TG_CHAT_ID = "696084464"; 
     
-    // 檢查頻率 (毫秒)：隨機 1 至 2 分鐘
-    const MIN_INTERVAL = 60000; // 1 分鐘
-    const MAX_INTERVAL = 120000; // 2 分鐘
+    const MIN_INTERVAL = 60000; 
+    const MAX_INTERVAL = 120000; 
 
-    // ==========================================
-    // 變數區
-    // ==========================================
     let monitorTimer = null;
     let isMonitoring = false;
     let lastStatusWasOutOfStock = true;
 
-    // ==========================================
-    // 發送 Telegram 通知
-    // ==========================================
     function sendTelegramAlert(message) {
         const url = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`;
-        const body = {
-            chat_id: TG_CHAT_ID,
-            text: message,
-            parse_mode: 'HTML'
-        };
-
-        fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body)
-        })
-        .then(res => {
-            if(res.ok) console.log("✅ Telegram OK!");
-            else console.error("❌ Telegram Failed:", res.status);
-        })
+        const body = { chat_id: TG_CHAT_ID, text: message, parse_mode: 'HTML' };
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(res => { if(!res.ok) console.error("❌ Telegram Failed:", res.status); })
         .catch(err => console.error("❌ Telegram Error:", err));
     }
 
-    // ==========================================
-    // 核心功能：無痕 Fetch 檢查庫存
-    // ==========================================
     function checkStock() {
         if (!isMonitoring) return;
-
         const currentUrl = window.location.href;
         updateUIStatus("Checking...", "#ffcc00");
 
-        // 背後靜靜雞 Fetch
-        fetch(currentUrl + "?t=" + new Date().getTime(), { 
-            headers: { 'Cache-Control': 'no-cache' } 
-        })
+        fetch(currentUrl + "?t=" + new Date().getTime(), { headers: { 'Cache-Control': 'no-cache' } })
         .then(res => res.text())
         .then(htmlText => {
             let now = new Date().toLocaleTimeString('en-GB');
             updateUILastCheck(now);
 
-            // 💡 終極暴力判斷邏輯：只認「掣」，無視干擾字眼！
+            // 💡 V3.2 精準判斷邏輯 (針對 p-button--red 同 msg.placePreOrder)
             
-            // 條件 1: 網頁入面必定要存在「紅色按鈕」嘅專屬 Class 或 ID
-            // 涵蓋 "m-btn p-btn-red" (通用紅掣) 或 "js-addCart" 或 "js-preorder"
-            let hasRedBtn = htmlText.includes('m-btn p-btn-red') || 
-                            htmlText.includes('id="js-addCart"') ||
-                            htmlText.includes('id="js-preorder"') ||
-                            htmlText.includes('name="place_preorder"');
+            // 1. 搵有冇「送出訂單 / PLACE PRE-ORDER / 加入購物車」嘅專屬特徵
+            // 包含舊版 m-btn p-btn-red 同新版 p-button--red / msg.placePreOrder
+            let hasRedBtn = htmlText.includes('p-button--red') || 
+                            htmlText.includes('msg.placePreOrder') || 
+                            htmlText.includes('m-btn p-btn-red') || 
+                            htmlText.includes('id="js-addCart"');
             
-            // 條件 2: 呢個紅色按鈕「絕對唔可以」帶有 'is-disabled' (即係灰咗禁唔到)
-            let isDisabled = htmlText.includes('m-btn p-btn-red is-disabled') ||
-                             htmlText.includes('class="m-btn p-btn-red is-disabled"');
+            // 2. 搵有冇「死掣」特徵
+            // 包含舊版 is-disabled 同新版 is-noActive
+            let isDisabled = htmlText.includes('is-noActive') || 
+                             htmlText.includes('is-disabled');
 
-            // 💡 新判定：
-            // 只要搵到紅色按鈕 (hasRedBtn) 並且佢無變灰 (!isDisabled)，就必定係「有貨」！
-            // 即使網頁暗藏咗「缺貨」字眼都唔理！
-            let isOutOfStock = !(hasRedBtn && !isDisabled);
+            // 3. 直接檢查有無新版專屬嘅「缺貨屬性」
+            let hasOutOfStockText = htmlText.includes('msg.sorryOutOfStock');
+
+            // 💡 判斷：
+            // 如果 (冇紅掣) 或者 (掣變咗 noActive/disabled) 或者 (出現 msg.sorryOutOfStock) -> 無貨
+            let isOutOfStock = (!hasRedBtn) || isDisabled || hasOutOfStockText;
 
             if (isOutOfStock) {
                 updateUIStatus("Out of Stock (無貨)", "#ff4444");
                 lastStatusWasOutOfStock = true;
-                console.log(`[${now}] 狀態：無貨 (搵唔到有效嘅購買按鈕)`);
+                console.log(`[${now}] 狀態：無貨`);
             } else {
                 updateUIStatus("IN STOCK! (有貨)", "#00ff88");
                 console.log(`[${now}] 狀態：有貨！`);
-                
                 if (lastStatusWasOutOfStock) {
                     let productName = document.title.split('|')[0].trim();
                     let msg = `🚨 <b>【P-Bandai 補貨通知】</b> 🚨\n\n📦 <b>商品:</b> ${productName}\n🛒 <b>狀態:</b> 現在有貨！\n🔗 <b>快啲去買:</b> <a href="${currentUrl}">${currentUrl}</a>`;
@@ -98,7 +70,6 @@
                     lastStatusWasOutOfStock = false; 
                 }
             }
-
             scheduleNextCheck();
         })
         .catch(err => {
@@ -113,13 +84,9 @@
         const nextInterval = Math.floor(Math.random() * (MAX_INTERVAL - MIN_INTERVAL + 1)) + MIN_INTERVAL;
         let nextTime = new Date(Date.now() + nextInterval).toLocaleTimeString('en-GB');
         document.getElementById('pbm-next').innerText = nextTime;
-        
         monitorTimer = setTimeout(checkStock, nextInterval);
     }
 
-    // ==========================================
-    // UI 控制面板
-    // ==========================================
     function createUI() {
         const panel = document.createElement('div');
         panel.id = 'pbm-panel';
@@ -127,7 +94,7 @@
         
         panel.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding-bottom:5px; margin-bottom:10px;">
-                <h3 style="color:#fc0; margin:0; font-size:14px; font-weight:bold;">🛰️ PB Monitor V3.1</h3>
+                <h3 style="color:#fc0; margin:0; font-size:14px; font-weight:bold;">🛰️ PB Monitor V3.2</h3>
                 <span id="pbm-close" style="cursor:pointer; color:#999; font-size:14px; font-weight:bold;">✕</span>
             </div>
             <div style="margin-bottom:8px">
@@ -161,9 +128,7 @@
                 isMonitoring = true;
                 toggleBtn.innerText = "⏹️ Stop Monitor";
                 toggleBtn.style.background = "#dc3545";
-                
-                sendTelegramAlert(`📡 <b>系統啟動</b>\n正在監控: <a href="${window.location.href}">${document.title.split('|')[0]}</a>`);
-                
+                sendTelegramAlert(`📡 <b>系統啟動 (V3.2)</b>\n正在監控: <a href="${window.location.href}">${document.title.split('|')[0]}</a>`);
                 checkStock();
             }
         });
@@ -171,10 +136,7 @@
 
     function updateUIStatus(text, color) {
         const st = document.getElementById('pbm-status');
-        if(st) {
-            st.innerText = text;
-            st.style.color = color;
-        }
+        if(st) { st.innerText = text; st.style.color = color; }
     }
 
     function updateUILastCheck(timeStr) {
@@ -183,5 +145,4 @@
     }
 
     createUI();
-
 })();
