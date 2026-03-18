@@ -13,9 +13,9 @@
     const TG_TOKEN = "8744700068:AAG5q3FS3ST78U0j1D4LZhej9DBvmHb0t_E"; 
     const TG_CHAT_ID = "696084464"; 
     
-    // 檢查頻率 (毫秒)：隨機 2 至 5 分鐘，避開防Bot偵測
-    const MIN_INTERVAL = 120000; // 2 分鐘
-    const MAX_INTERVAL = 300000; // 5 分鐘
+    // 檢查頻率 (毫秒)：隨機 1 至 2 分鐘
+    const MIN_INTERVAL = 60000; // 1 分鐘
+    const MAX_INTERVAL = 120000; // 2 分鐘
 
     // ==========================================
     // 變數區
