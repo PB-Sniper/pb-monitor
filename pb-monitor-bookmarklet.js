@@ -48,7 +48,7 @@
     }
 
     // ==========================================
-    // 核心功能：無痕 Fetch 檢查庫存 (Bookmarklet 專用)
+    // 核心功能：無痕 Fetch 檢查庫存
     // ==========================================
     function checkStock() {
         if (!isMonitoring) return;
@@ -56,7 +56,7 @@
         const currentUrl = window.location.href;
         updateUIStatus("Checking...", "#ffcc00");
 
-        // 背後靜靜雞 Fetch，唔會令主頁面 F5 刷新
+        // 背後靜靜雞 Fetch
         fetch(currentUrl + "?t=" + new Date().getTime(), { 
             headers: { 'Cache-Control': 'no-cache' } 
         })
@@ -65,33 +65,28 @@
             let now = new Date().toLocaleTimeString('en-GB');
             updateUILastCheck(now);
 
-            // 💡 強化版判斷邏輯 (支援中英雙語及多種紅掣)
+            // 💡 終極暴力判斷邏輯：只認「掣」，無視干擾字眼！
             
-            // 1. 檢查有冇任何類型嘅「有效紅色大掣」 (包含 add-to-cart, preorder, 或者純粹係 p-btn-red)
-            let hasRedBtn = htmlText.includes('class="m-btn p-btn-red') || 
+            // 條件 1: 網頁入面必定要存在「紅色按鈕」嘅專屬 Class 或 ID
+            // 涵蓋 "m-btn p-btn-red" (通用紅掣) 或 "js-addCart" 或 "js-preorder"
+            let hasRedBtn = htmlText.includes('m-btn p-btn-red') || 
                             htmlText.includes('id="js-addCart"') ||
-                            htmlText.includes('id="js-preorder"');
+                            htmlText.includes('id="js-preorder"') ||
+                            htmlText.includes('name="place_preorder"');
             
-            // 2. 檢查個掣係咪灰咗 (is-disabled)
-            let isDisabled = htmlText.includes('is-disabled');
-            
-            // 3. 檢查有冇明確嘅「缺貨字眼」 (包含中英文)
-            let hasOutOfStockText = htmlText.includes("預購結束") || 
-                                    htmlText.includes("缺貨") || 
-                                    htmlText.includes("已達到預約上限") ||
-                                    htmlText.includes("Pre-orders Closed") ||
-                                    htmlText.includes("Out of Stock") ||
-                                    htmlText.includes("Sales Ended") ||
-                                    htmlText.includes("Reached reservation limit");
+            // 條件 2: 呢個紅色按鈕「絕對唔可以」帶有 'is-disabled' (即係灰咗禁唔到)
+            let isDisabled = htmlText.includes('m-btn p-btn-red is-disabled') ||
+                             htmlText.includes('class="m-btn p-btn-red is-disabled"');
 
-            // 💡 最終判定：
-            // 如果 (冇紅掣) 或者 (掣灰咗) 或者 (有缺貨字眼) -> 就係無貨
-            let isOutOfStock = (!hasRedBtn) || isDisabled || hasOutOfStockText;
+            // 💡 新判定：
+            // 只要搵到紅色按鈕 (hasRedBtn) 並且佢無變灰 (!isDisabled)，就必定係「有貨」！
+            // 即使網頁暗藏咗「缺貨」字眼都唔理！
+            let isOutOfStock = !(hasRedBtn && !isDisabled);
 
             if (isOutOfStock) {
                 updateUIStatus("Out of Stock (無貨)", "#ff4444");
                 lastStatusWasOutOfStock = true;
-                console.log(`[${now}] 狀態：無貨`);
+                console.log(`[${now}] 狀態：無貨 (搵唔到有效嘅購買按鈕)`);
             } else {
                 updateUIStatus("IN STOCK! (有貨)", "#00ff88");
                 console.log(`[${now}] 狀態：有貨！`);
@@ -104,7 +99,6 @@
                 }
             }
 
-            // 安排下次背後 Fetch
             scheduleNextCheck();
         })
         .catch(err => {
@@ -120,7 +114,6 @@
         let nextTime = new Date(Date.now() + nextInterval).toLocaleTimeString('en-GB');
         document.getElementById('pbm-next').innerText = nextTime;
         
-        // 只係再次 call checkStock()，絕對唔用 reload()
         monitorTimer = setTimeout(checkStock, nextInterval);
     }
 
@@ -132,10 +125,9 @@
         panel.id = 'pbm-panel';
         panel.style.cssText = 'position:fixed;bottom:20px;right:20px;width:240px;background:rgba(20,20,20,0.95);color:#fff;z-index:999999;padding:15px;border-radius:8px;font-size:13px;border:1px solid #444;box-shadow:0 4px 15px rgba(0,0,0,0.5);font-family:sans-serif;';
         
-        // 加入 Close 按鈕方便手動關閉
         panel.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding-bottom:5px; margin-bottom:10px;">
-                <h3 style="color:#fc0; margin:0; font-size:14px; font-weight:bold;">🛰️ PB Monitor V3.0</h3>
+                <h3 style="color:#fc0; margin:0; font-size:14px; font-weight:bold;">🛰️ PB Monitor V3.1</h3>
                 <span id="pbm-close" style="cursor:pointer; color:#999; font-size:14px; font-weight:bold;">✕</span>
             </div>
             <div style="margin-bottom:8px">
@@ -150,7 +142,6 @@
         `;
         document.body.appendChild(panel);
 
-        // 綁定關閉按鈕
         document.getElementById('pbm-close').onclick = function() {
             isMonitoring = false;
             clearTimeout(monitorTimer);
@@ -160,7 +151,6 @@
         const toggleBtn = document.getElementById('pbm-toggle-btn');
         toggleBtn.addEventListener('click', function() {
             if (isMonitoring) {
-                // 停止
                 isMonitoring = false;
                 clearTimeout(monitorTimer);
                 toggleBtn.innerText = "▶️ Start Monitor";
@@ -168,14 +158,13 @@
                 updateUIStatus("Stopped", "#aaa");
                 document.getElementById('pbm-next').innerText = "--:--:--";
             } else {
-                // 啟動
                 isMonitoring = true;
                 toggleBtn.innerText = "⏹️ Stop Monitor";
                 toggleBtn.style.background = "#dc3545";
                 
-                sendTelegramAlert(`📡 <b>系統啟動 (Fetch 模式)</b>\n正在監控: <a href="${window.location.href}">${document.title.split('|')[0]}</a>`);
+                sendTelegramAlert(`📡 <b>系統啟動</b>\n正在監控: <a href="${window.location.href}">${document.title.split('|')[0]}</a>`);
                 
-                checkStock(); // 立即做第一次檢查
+                checkStock();
             }
         });
     }
@@ -193,7 +182,6 @@
         if(lc) lc.innerText = timeStr;
     }
 
-    // 啟動 UI
     createUI();
 
 })();
