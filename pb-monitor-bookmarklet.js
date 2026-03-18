@@ -127,7 +127,7 @@
         // 加入 Close 按鈕方便手動關閉
         panel.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding-bottom:5px; margin-bottom:10px;">
-                <h3 style="color:#fc0; margin:0; font-size:14px; font-weight:bold;">🛰️ Monitor (Fetch 版)</h3>
+                <h3 style="color:#fc0; margin:0; font-size:14px; font-weight:bold;">🛰️ PB Monitor V3.0</h3>
                 <span id="pbm-close" style="cursor:pointer; color:#999; font-size:14px; font-weight:bold;">✕</span>
             </div>
             <div style="margin-bottom:8px">
