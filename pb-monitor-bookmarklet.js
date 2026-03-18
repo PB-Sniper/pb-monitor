@@ -9,8 +9,8 @@
     const TG_TOKEN = "8744700068:AAG5q3FS3ST78U0j1D4LZhej9DBvmHb0t_E"; 
     const TG_CHAT_ID = "696084464"; 
     
-    // 每 10 秒直接掃描一次「當前畫面」
-    const CHECK_INTERVAL = 10000; 
+    const MIN_INTERVAL = 60000; 
+    const MAX_INTERVAL = 120000; 
 
     let monitorTimer = null;
     let isMonitoring = false;
@@ -25,36 +25,76 @@
 
     function checkStock() {
         if (!isMonitoring) return;
-        
-        let now = new Date().toLocaleTimeString('en-GB');
-        updateUILastCheck(now);
+        const currentUrl = window.location.href;
+        updateUIStatus("Checking...", "#ffcc00");
 
-        // 💡 V5.0 絕招：唔 Fetch 啦！直接喺你「眼前個網頁 (document)」搵個掣！
-        let activeCartBtn = document.querySelector('button.p-button--red, a.p-button--red, button.add-to-cart, a.add-to-cart, #js-addCart');
-        
-        let isBtnDisabled = false;
-        if (activeCartBtn) {
-            isBtnDisabled = activeCartBtn.classList.contains('is-noActive') || 
-                            activeCartBtn.classList.contains('is-disabled');
-        }
+        // 帶住 Cookie 嘅暴力 Fetch (沿用你 V1.0 嘅精髓)
+        fetch(currentUrl + "?t=" + new Date().getTime(), { 
+            credentials: "include", 
+            cache: "no-store" 
+        })
+        .then(res => res.text())
+        .then(htmlText => {
+            let now = new Date().toLocaleTimeString('en-GB');
+            updateUILastCheck(now);
 
-        // 如果眼前連掣都無，或者個掣灰咗，就係無貨
-        let isOutOfStock = (!activeCartBtn) || isBtnDisabled;
+            // 💡 V6.0 暴力字串掃描 (唔理佢係 DOM 定 JSON，總之有字就當有！)
+            
+            // 尋找「有效按鈕特徵」：
+            // p-button--red (新版紅掣) / msg.placePreOrder (送出訂單) / add-to-cart (舊版)
+            let hasRedBtn = htmlText.includes('p-button--red') || 
+                            htmlText.includes('msg.placePreOrder') ||
+                            htmlText.includes('add-to-cart');
+            
+            // 尋找「失效按鈕特徵」：
+            let isDisabled = htmlText.includes('is-noActive') || 
+                             htmlText.includes('is-disabled');
 
-        if (isOutOfStock) {
-            updateUIStatus("Out of Stock (無貨)", "#ff4444");
-            lastStatusWasOutOfStock = true;
-            console.log(`[${now}] 狀態：無貨`);
-        } else {
-            updateUIStatus("IN STOCK! (有貨)", "#00ff88");
-            console.log(`[${now}] 狀態：有貨！`);
-            if (lastStatusWasOutOfStock) {
-                let productName = document.title.split('|')[0].trim();
-                let msg = `🚨 <b>【P-Bandai 補貨通知】</b> 🚨\n\n📦 <b>商品:</b> ${productName}\n🛒 <b>狀態:</b> 現在有貨！\n🔗 <b>快啲去買:</b> <a href="${window.location.href}">${window.location.href}</a>`;
-                sendTelegramAlert(msg);
-                lastStatusWasOutOfStock = false; 
+            // 尋找「明確缺貨字眼」：
+            let hasOutOfStockText = htmlText.includes('msg.sorryOutOfStock') ||
+                                    htmlText.includes('預購結束') ||
+                                    htmlText.includes('缺貨');
+
+            // 判斷邏輯：
+            // 如果連「紅掣」嘅字眼都搵唔到，或者搵到但隔離跟住「noActive/disabled/缺貨」，就係無貨！
+            let isOutOfStock = (!hasRedBtn) || isDisabled || hasOutOfStockText;
+
+            if (isOutOfStock) {
+                updateUIStatus("Out of Stock (無貨)", "#ff4444");
+                lastStatusWasOutOfStock = true;
+                console.log(`[${now}] 狀態：無貨`);
+            } else {
+                updateUIStatus("IN STOCK! (有貨)", "#00ff88");
+                console.log(`[${now}] 狀態：有貨！`);
+                
+                // 播聲！(沿用你 V1.0 加落去嘅鬧鐘聲)
+                try {
+                    let audio = new Audio('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
+                    audio.play();
+                } catch(e) {}
+
+                if (lastStatusWasOutOfStock) {
+                    let productName = document.title.split('|')[0].trim();
+                    let msg = `🚨 <b>【P-Bandai 補貨通知】</b> 🚨\n\n📦 <b>商品:</b> ${productName}\n🛒 <b>狀態:</b> 現在有貨！\n🔗 <b>快啲去買:</b> <a href="${currentUrl}">${currentUrl}</a>`;
+                    sendTelegramAlert(msg);
+                    lastStatusWasOutOfStock = false; 
+                }
             }
-        }
+            scheduleNextCheck();
+        })
+        .catch(err => {
+            console.error("檢查失敗：", err);
+            updateUIStatus("Error - Retrying...", "#ffaa00");
+            scheduleNextCheck();
+        });
+    }
+
+    function scheduleNextCheck() {
+        if (!isMonitoring) return;
+        const nextInterval = Math.floor(Math.random() * (MAX_INTERVAL - MIN_INTERVAL + 1)) + MIN_INTERVAL;
+        let nextTime = new Date(Date.now() + nextInterval).toLocaleTimeString('en-GB');
+        document.getElementById('pbm-next').innerText = nextTime;
+        monitorTimer = setTimeout(checkStock, nextInterval);
     }
 
     function createUI() {
@@ -64,7 +104,7 @@
         
         panel.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #555; padding-bottom:5px; margin-bottom:10px;">
-                <h3 style="color:#fc0; margin:0; font-size:14px; font-weight:bold;">🛰️ PB Monitor V5.0</h3>
+                <h3 style="color:#fc0; margin:0; font-size:14px; font-weight:bold;">🛰️ PB Monitor V6.0</h3>
                 <span id="pbm-close" style="cursor:pointer; color:#999; font-size:14px; font-weight:bold;">✕</span>
             </div>
             <div style="margin-bottom:8px">
@@ -72,7 +112,8 @@
                 <span id="pbm-status" style="font-weight:bold;color:#aaa;">Stopped</span>
             </div>
             <div style="margin-bottom:8px;font-size:11px;color:#aaa;">
-                Last Check: <span id="pbm-last">--:--:--</span>
+                Last Check: <span id="pbm-last">--:--:--</span><br>
+                Next Check: <span id="pbm-next">--:--:--</span>
             </div>
             <button id="pbm-toggle-btn" style="width:100%;padding:8px;background:#28a745;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:bold;">▶️ Start Monitor</button>
         `;
@@ -80,7 +121,7 @@
 
         document.getElementById('pbm-close').onclick = function() {
             isMonitoring = false;
-            clearInterval(monitorTimer);
+            clearTimeout(monitorTimer);
             panel.remove();
         };
 
@@ -88,17 +129,17 @@
         toggleBtn.addEventListener('click', function() {
             if (isMonitoring) {
                 isMonitoring = false;
-                clearInterval(monitorTimer);
+                clearTimeout(monitorTimer);
                 toggleBtn.innerText = "▶️ Start Monitor";
                 toggleBtn.style.background = "#28a745";
                 updateUIStatus("Stopped", "#aaa");
+                document.getElementById('pbm-next').innerText = "--:--:--";
             } else {
                 isMonitoring = true;
                 toggleBtn.innerText = "⏹️ Stop Monitor";
                 toggleBtn.style.background = "#dc3545";
-                sendTelegramAlert(`📡 <b>系統啟動 (V5.0 直讀畫面版)</b>`);
-                checkStock(); // 立即 Check 一次
-                monitorTimer = setInterval(checkStock, CHECK_INTERVAL); // 每 10 秒循環望一次畫面
+                sendTelegramAlert(`📡 <b>系統啟動 (V6.0 暴力解析版)</b>\n正在監控: <a href="${window.location.href}">${document.title.split('|')[0]}</a>`);
+                checkStock();
             }
         });
     }
