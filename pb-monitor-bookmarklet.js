@@ -138,7 +138,7 @@
                 isMonitoring = true;
                 toggleBtn.innerText = "⏹️ Stop Monitor";
                 toggleBtn.style.background = "#dc3545";
-                sendTelegramAlert(`📡 <b>系統啟動 (V6.0 暴力解析版)</b>\n正在監控: <a href="${window.location.href}">${document.title.split('|')[0]}</a>`);
+                sendTelegramAlert(`📡 <b>系統啟動 (V6.0)</b>\n正在監控: <a href="${window.location.href}">${document.title.split('|')[0]}</a>`);
                 checkStock();
             }
         });
