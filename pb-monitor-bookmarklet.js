@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         P-Bandai Stock Monitor V6.1 (Auto-F5 Edition)
+// @name         P-Bandai Stock Monitor V6.1
 // @namespace    https://github.com/
 // @version      6.1
 // @description  P-Bandai 終極補貨監控：全自動 F5 刷新頁面，每 30 秒視覺掃描，有貨即鎖定及 Telegram 通知
@@ -16,13 +16,13 @@
     // ⚙️ 使用者設定區 (USER CONFIG)
     // ==========================================
     
-    // Telegram Bot Token (請找 @BotFather 獲取)
+    // Telegram Bot Token (如果放上 Public GitHub，建議先清空，安裝後再填)
     const TG_TOKEN = "8744700068:AAG5q3FS3ST78U0j1D4LZhej9DBvmHb0t_E";
     
-    // Telegram Chat ID (請找 @userinfobot 獲取)
+    // Telegram Chat ID
     const TG_CHAT_ID = "696084464";
 
-    // ⚡ 檢查頻率 (毫秒)：25,000 到 35,000 之間隨機 (約 30 秒)，防止被 Akamai 判定為 Bot
+    // ⚡ 檢查頻率 (毫秒)：25,000 到 35,000 之間隨機 (約 30 秒)
     const MIN_INTERVAL = 25000;  
     const MAX_INTERVAL = 35000; 
     
@@ -34,6 +34,7 @@
     let isMonitoring = localStorage.getItem('pbm_v6_monitoring') === 'true';
 
     function sendTelegramAlert(message) {
+        if (!TG_TOKEN) return;
         const url = `https://api.telegram.org/bot${TG_TOKEN}/sendMessage`;
         const body = { chat_id: TG_CHAT_ID, text: message, parse_mode: 'HTML' };
         fetch(url, { 
@@ -115,7 +116,7 @@
 
         panel.innerHTML = `
             <h3 style="color:#fc0;margin:0 0 10px;border-bottom:1px solid #555;padding-bottom:5px;font-size:14px;font-weight:bold;">
-                🛰️ PB Monitor V6.1 (30s 極速版)
+                🛰️ P-Bandai Stock Monitor V6.1
             </h3>
             <div style="margin-bottom:8px">
                 <span style="color:#aaa;">Status: </span>
@@ -137,7 +138,7 @@
                 stopSystem();
             } else {
                 startSystem();
-                sendTelegramAlert(`📡 <b>系統啟動 (V6.1 極速 30 秒版)</b>\n正在監控: ${document.title.split('|')[0]}`);
+                sendTelegramAlert(`📡 <b>系統啟動 (V6.1)</b>\n正在監控: ${document.title.split('|')[0]}`);
             }
         });
 
